@@ -5,9 +5,9 @@
   "main": "index.ts",
   "scripts": {
     "dev": "run-p \"dev:* -- {1} {2}\" --",
-    "dev:cf": "bun run src/composables.ts",
-    "dev:effect": "bun run src/effect.ts",
-    "dev:vanilla": "bun run src/vanilla.ts"
+    "dev:cf": "bun run src/composable-functions.ts",
+    "dev:effect": "bun run src/effect-ts.ts",
+    "dev:vanilla": "bun run src/vanilla-ts.ts"
   },
   "author": "Gustavo Guichard",
   "license": "ISC",
