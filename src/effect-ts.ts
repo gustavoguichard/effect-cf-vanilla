@@ -1,49 +1,44 @@
-import { Effect, pipe } from 'effect'
-import { CouponNotFoundError, ProductNotFoundError } from './shared/errors'
+import { Effect, Either, pipe } from 'effect'
+import { UnknownException } from 'effect/Cause'
+import { ProductNotFoundError } from './shared/errors'
 import {
-  paramsSchema,
-  type Coupon,
-  type Params,
-  type Variant,
-} from './shared/types'
-import { findProductFromDB, getArgs, logger } from './shared/utils'
+  applyDiscountToVariants,
+  blankCoupon,
+  findCoupon,
+  findProductById,
+  findVariantsByProductId,
+} from './shared/model'
+import { paramsSchema, type Params } from './shared/types'
+import { getArgs, logger } from './shared/utils'
 
-const log = logger('Effect')
+const { log, logError, logSuccess } = logger('Effect')
 
-const getProduct = (params: Params) =>
-  Effect.tryPromise(() => findProductFromDB(params))
+const getProduct = (...params: Parameters<typeof findProductById>) =>
+  Effect.tryPromise({
+    try: () => findProductById(...params),
+    catch: (error) => {
+      log('📦 Product not found')
+      return error instanceof ProductNotFoundError
+        ? error
+        : new UnknownException('Product not found')
+    },
+  })
 
-const getVariants = ({
-  productId,
-}: Pick<Params, 'productId'>): Effect.Effect<
-  Array<Variant>,
-  ProductNotFoundError,
-  never
-> => {
-  if (productId !== '123') {
-    return Effect.fail(new ProductNotFoundError('Product not found'))
-  }
-  // This would come from your database
-  return Effect.succeed([
-    { productId, sku: 'small', name: 'Small', price: 8.99 },
-    { productId, sku: 'medium', name: 'Medium', price: 10.99 },
-    { productId, sku: 'large', name: 'Large', price: 12.99 },
-  ])
-}
+const getVariants = (...params: Parameters<typeof findVariantsByProductId>) =>
+  Effect.tryPromise({
+    try: () => findVariantsByProductId(...params),
+    catch: (error) =>
+      error instanceof ProductNotFoundError
+        ? error
+        : new UnknownException('Variants not found'),
+  })
 
-const getCoupon = ({
-  couponCode,
-}: Pick<Params, 'couponCode'>): Effect.Effect<
-  Coupon,
-  CouponNotFoundError,
-  never
-> => {
-  if (couponCode !== '10OFF') {
-    return Effect.fail(new CouponNotFoundError('Coupon not found'))
-  }
-  // This would come from your database
-  return Effect.succeed({ code: couponCode, discount: 10 })
-}
+const getCoupon = (...params: Parameters<typeof findCoupon>) =>
+  Effect.flatMap(
+    Effect.either(Effect.tryPromise(() => findCoupon(...params))),
+    (e) =>
+      Either.isLeft(e) ? Effect.succeed(blankCoupon) : Effect.succeed(e.right),
+  )
 
 const getProductPageDataBeforeDiscount = (params: Params) =>
   Effect.all({
@@ -52,53 +47,23 @@ const getProductPageDataBeforeDiscount = (params: Params) =>
     coupon: getCoupon(params),
   })
 
-const applyDiscountToVariants = ({
-  variants,
-  discount,
-}: {
-  variants: Array<Variant>
-  discount: number
-}): Effect.Effect<
-  Array<Variant & { priceWithDiscount: number }>,
-  Error,
-  never
-> =>
-  discount === 0
-    ? Effect.fail(new Error('Discount cannot be zeo'))
-    : Effect.succeed(
-        variants.map((variant) => ({
-          ...variant,
-          priceWithDiscount: variant.price * (1 - discount / 100),
-        })),
-      )
-
-const getProductPageData = () =>
-  pipe(
-    Effect.try(getArgs),
-    Effect.map(paramsSchema.parse),
-    Effect.flatMap(getProductPageDataBeforeDiscount),
-    Effect.flatMap(({ product, variants, coupon }) =>
-      Effect.all([
-        Effect.succeed({ product, coupon }),
-        applyDiscountToVariants({
-          variants,
-          discount: coupon.discount,
-        }),
-      ]),
-    ),
-    Effect.map(([{ product, coupon }, variants]) => ({
-      product,
+const program = pipe(
+  Effect.try(getArgs),
+  Effect.map(paramsSchema.parse),
+  Effect.flatMap(getProductPageDataBeforeDiscount),
+  Effect.map(({ product, coupon, variants }) => ({
+    product,
+    variants: applyDiscountToVariants({
       variants,
-      coupon,
-    })),
-  )
+      discount: coupon.discount,
+    }),
+    coupon,
+  })),
+)
 
-async function main() {
-  const result = await Effect.runPromiseExit(getProductPageData())
+const main = Effect.match(program, {
+  onFailure: (error) => logError(error),
+  onSuccess: (data) => logSuccess(data),
+})
 
-  result._tag === 'Failure'
-    ? log.logError(result.cause)
-    : log.logResult(result.value)
-}
-
-await main()
+await Effect.runPromise(main)
