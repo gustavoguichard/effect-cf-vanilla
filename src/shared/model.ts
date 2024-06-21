@@ -3,18 +3,23 @@ import type { Coupon, Product, Variant } from './types'
 
 const blankCoupon: Coupon = { code: '', discount: 0 }
 
+/**
+ * Simulates a database call to find a product by its ID
+ */
 const findProductById = async ({
   productId,
 }: {
   productId: string
 }): Promise<Product> => {
-  // This would come from your database
   if (productId !== '123') {
     throw new ProductNotFoundError('Product not found')
   }
   return { id: productId, name: 'Magical T-Shirt' }
 }
 
+/**
+ * Simulates a database call to find all variants for a product
+ */
 const findVariantsByProductId = async ({
   productId,
 }: {
@@ -31,6 +36,9 @@ const findVariantsByProductId = async ({
   ]
 }
 
+/**
+ * Simulates a database call to find a coupon by its code
+ */
 const findCoupon = async ({
   couponCode,
 }: {
@@ -43,6 +51,9 @@ const findCoupon = async ({
   return { code: couponCode, discount: 10 }
 }
 
+/**
+ * A function that applies a discount to an array of variants
+ */
 function applyDiscountToVariants({
   variants,
   discount,

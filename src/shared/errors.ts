@@ -1,3 +1,8 @@
+/**
+ * Some custom errors thrown by the application
+ * We are using both _tag and name properties to please Effect and Composable Functions
+ */
+
 class ProductNotFoundError extends Error {
   readonly _tag = 'ProductNotFoundError'
   constructor(message: string) {
