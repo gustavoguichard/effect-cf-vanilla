@@ -37,7 +37,7 @@ const getVariants = (...params: Parameters<typeof findVariantsByProductId>) =>
         : new UnknownException('Unexpected error'),
   })
 
-// Wrap the findCoupon function, log the error, and ensure we always return a coupon
+// Wrap the findCoupon function and ensure we always return a coupon
 const getCoupon = (...params: Parameters<typeof findCoupon>) =>
   Effect.flatMap(
     Effect.either(Effect.tryPromise(() => findCoupon(...params))),
@@ -58,11 +58,9 @@ const program = pipe(
   // Get the arguments from the terminal
   Effect.try(getArgs),
   // Check the arguments at runtime
-  // If this breaks, the program halts
-  Effect.map(paramsSchema.parse),
+  Effect.flatMap((args) => Effect.try(() => paramsSchema.parse(args))),
   // Use the arguments as input to the program
   Effect.flatMap(getProductPageDataBeforeDiscount),
-
   Effect.map(({ product, coupon, variants }) => ({
     product,
     coupon,
