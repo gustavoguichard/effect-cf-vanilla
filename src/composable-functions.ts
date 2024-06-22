@@ -1,4 +1,5 @@
 import * as cf from 'composable-functions'
+import { getArgs, makeLogger } from './shared'
 import {
   applyDiscountToVariants,
   blankCoupon,
@@ -7,30 +8,16 @@ import {
   findVariantsByProductId,
 } from './shared/model'
 import { paramsSchema } from './shared/types'
-import { getArgs, logger } from './shared/utils'
 
 // Create a custom logger for this program
-const { log, logError, logSuccess } = logger('Composable Functions')
-
-// Wrap the findProductById function with a trace function to log when the product is not found
-const getProduct = cf.trace((result) => {
-  if (!result.success) log('📦 Product not found')
-})(cf.composable(findProductById))
-
-// Wrap the findVariantsByProductId function
-const getVariants = cf.composable(findVariantsByProductId)
-
-// Wrap the findCoupon function, log the error, and ensure we always return a coupon
-const getCoupon = cf.catchFailure(cf.composable(findCoupon), () => {
-  log('🏷️ Coupon not found')
-  return blankCoupon
-})
+const logger = makeLogger('Composable Functions')
 
 // Collect the data from the different sources in parallel
 const getProductPageDataBeforeDiscount = cf.collect({
-  product: getProduct,
-  variants: getVariants,
-  coupon: getCoupon,
+  product: cf.composable(findProductById),
+  variants: cf.composable(findVariantsByProductId),
+  // Ensure we always return a coupon
+  coupon: cf.catchFailure(cf.composable(findCoupon), () => blankCoupon),
 })
 
 // applySchema will ensure the data at runtime
@@ -43,16 +30,17 @@ const getProductPageData = cf.applySchema(paramsSchema)(
   })),
 )
 
+// Log custom errors
+const traceErrors = cf.trace((result) => result.errors.forEach(logger.error))
+
 // Get the arguments from the terminal and use as input to the program
-const program = cf.pipe(cf.composable(getArgs), getProductPageData)
+const program = traceErrors(cf.pipe(cf.composable(getArgs), getProductPageData))
 
 // Run the program and log the result depending on success/failure
 async function main() {
   const result = await program()
 
-  result.success
-    ? logSuccess(result.data)
-    : logError(cf.serialize(result).errors)
+  result.success ? logger.exit(result.data) : logger.fail(cf.serialize(result))
 }
 
 await main()

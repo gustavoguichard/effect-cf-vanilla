@@ -1,4 +1,8 @@
-import { CouponNotFoundError, ProductNotFoundError } from './errors'
+import {
+  CouponNotFoundError,
+  ProductNotFoundError,
+  VariantsNotFoundError,
+} from './errors'
 import type { Coupon, Product, Variant } from './types'
 
 const blankCoupon: Coupon = { code: '', discount: 0 }
@@ -12,7 +16,7 @@ const findProductById = async ({
   productId: string
 }): Promise<Product> => {
   if (productId !== '123') {
-    throw new ProductNotFoundError('Product not found')
+    throw new ProductNotFoundError()
   }
   return { id: productId, name: 'Magical T-Shirt' }
 }
@@ -26,7 +30,7 @@ const findVariantsByProductId = async ({
   productId: string
 }): Promise<Array<Variant>> => {
   if (productId !== '123') {
-    throw new ProductNotFoundError('Product not found')
+    throw new VariantsNotFoundError()
   }
   // This would come from your database
   return [
@@ -45,7 +49,7 @@ const findCoupon = async ({
   couponCode: string
 }): Promise<Coupon> => {
   if (couponCode !== '10OFF') {
-    throw new CouponNotFoundError('Coupon not found')
+    throw new CouponNotFoundError()
   }
   // This would come from your database
   return { code: couponCode, discount: 10 }
