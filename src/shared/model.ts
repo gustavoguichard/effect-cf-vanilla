@@ -67,7 +67,9 @@ function applyDiscountToVariants({
 }): Array<Variant & { priceWithDiscount: number }> {
   return variants.map((variant) => ({
     ...variant,
-    priceWithDiscount: variant.price * (1 - discount / 100),
+    priceWithDiscount: Number(
+      (variant.price * (1 - discount / 100)).toFixed(2),
+    ),
   }))
 }
 

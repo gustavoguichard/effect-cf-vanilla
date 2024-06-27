@@ -7,7 +7,8 @@
     "dev": "run-p \"dev:* -- {1} {2}\" --",
     "dev:cf": "bun run src/composable-functions.ts",
     "dev:effect": "bun run src/effect-ts.ts",
-    "dev:vanilla": "bun run src/vanilla-ts.ts"
+    "dev:vanilla": "bun run src/vanilla-ts.ts",
+    "test": "bun test"
   },
   "author": "Gustavo Guichard",
   "license": "ISC",
