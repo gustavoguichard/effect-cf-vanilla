@@ -8,7 +8,7 @@ import {
   findCoupon,
   findProductById,
   findVariantsByProductId,
-} from './shared/model'
+} from './shared/business-logic'
 import { paramsSchema, type Params } from './shared/types'
 
 // Create a custom logger for this program

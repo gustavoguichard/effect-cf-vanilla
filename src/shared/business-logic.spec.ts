@@ -4,7 +4,7 @@ import {
   ProductNotFoundError,
   VariantsNotFoundError,
 } from './errors'
-import * as subject from './model'
+import * as subject from './business-logic'
 
 describe('findProductById', async () => {
   test('returns a product when found', async () => {
