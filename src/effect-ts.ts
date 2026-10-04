@@ -1,7 +1,5 @@
-import { Effect, Either, pipe } from 'effect'
-import { UnknownException } from 'effect/Cause'
+import { Effect } from 'effect'
 import { getArgs, makeLogger } from './shared'
-import { ProductNotFoundError, VariantsNotFoundError } from './shared/errors'
 import {
   applyDiscountToVariants,
   blankCoupon,
@@ -14,68 +12,44 @@ import { paramsSchema, type Params } from './shared/types'
 // Create a custom logger for this program
 const logger = makeLogger('Effect')
 
-// Wrap the findProductById function with a try/catch to log when the product is not found
-const getProduct = (...params: Parameters<typeof findProductById>) =>
-  Effect.tryPromise({
-    try: () => findProductById(...params),
-    catch: (error) => {
-      // We lost the type information here, so we need to check the error type again
-      return error instanceof ProductNotFoundError
-        ? error
-        : new UnknownException('Unexpected error')
-    },
-  })
-
-// Wrap the findVariantsByProductId function
-const getVariants = (...params: Parameters<typeof findVariantsByProductId>) =>
-  Effect.tryPromise({
-    try: () => findVariantsByProductId(...params),
-    // We lost the type information here, so we need to check the error type again
-    catch: (error) =>
-      error instanceof VariantsNotFoundError
-        ? error
-        : new UnknownException('Unexpected error'),
-  })
-
-// Wrap the findCoupon function and ensure we always return a coupon
-const getCoupon = (...params: Parameters<typeof findCoupon>) =>
-  Effect.flatMap(
-    Effect.either(Effect.tryPromise(() => findCoupon(...params))),
-    (e) =>
-      // Ensure we always return a coupon
-      Either.isLeft(e) ? Effect.succeed(blankCoupon) : Effect.succeed(e.right),
-  )
+// Wrap a function that might throw or reject so the error goes to the error channel
+const attempt = <A>(thunk: () => A | Promise<A>) =>
+  Effect.tryPromise({ try: async () => thunk(), catch: (error) => error })
 
 // Collect the data from the different sources in parallel
 const getProductPageDataBeforeDiscount = (params: Params) =>
-  Effect.all({
-    product: getProduct(params),
-    variants: getVariants(params),
-    coupon: getCoupon(params),
-  })
+  Effect.all(
+    {
+      product: attempt(() => findProductById(params)),
+      variants: attempt(() => findVariantsByProductId(params)),
+      // Ensure we always return a coupon
+      coupon: Effect.orElseSucceed(
+        attempt(() => findCoupon(params)),
+        () => blankCoupon,
+      ),
+    },
+    { concurrency: 'unbounded' },
+  )
 
-const program = pipe(
-  // Get the arguments from the terminal
-  Effect.try(getArgs),
-  // Check the arguments at runtime
-  Effect.flatMap((args) => Effect.try(() => paramsSchema.parse(args))),
+const program = attempt(() =>
+  // Get the arguments from the terminal and check them at runtime
+  paramsSchema.parse(getArgs()),
+).pipe(
   // Use the arguments as input to the program
   Effect.flatMap(getProductPageDataBeforeDiscount),
-  Effect.map(({ product, coupon, variants }) => ({
-    product,
-    coupon,
-    // Apply the discount to the variants
-    variants: applyDiscountToVariants({ variants, discount: coupon.discount }),
-  })),
+  Effect.flatMap(({ product, coupon, variants }) =>
+    attempt(() => ({
+      product,
+      coupon,
+      // Apply the discount to the variants
+      variants: applyDiscountToVariants({
+        variants,
+        discount: coupon.discount,
+      }),
+    })),
+  ),
   // Log custom errors
-  Effect.catchTag('ProductNotFoundError', (error) => {
-    logger.error(error)
-    return Effect.fail(error)
-  }),
-  Effect.catchTag('VariantsNotFoundError', (error) => {
-    logger.error(error)
-    return Effect.fail(error)
-  }),
+  Effect.tapError((error) => Effect.sync(() => logger.error(error))),
 )
 
 // Log the result depending on success/failure
